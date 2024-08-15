@@ -8,6 +8,19 @@ const hre = require("hardhat");
 
 async function main() {
 
+  [buyer, seller, inspector, lender] = await ethers.getSigners()
+
+  const RealEstate = await ethers.getContractFactory('RealEstate')
+  const realEstate = await RealEstate.deploy();
+  await realEstate.deployed();
+
+  console.log(`Deployed Real Estate at ${realEstate.address}`);
+  console.log(`Minting 3 properties...\n`);
+
+  for (let i = 0; i < 3; i++) {
+    let transaction = await realEstate.connect(seller).mint(`https://ipfs.io/ipfs/QmQUozrHLAusXDxrvsESJ3PYB3rUeUuBAvVWw6nop2uu7c/${i + 1}.json`)
+    await transaction.wait();
+  }
 }
 
 // We recommend this pattern to be able to use async/await everywhere

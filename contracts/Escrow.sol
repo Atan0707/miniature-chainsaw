@@ -23,11 +23,17 @@ contract Escrow {
         require(msg.sender == buyer[_nftID], "Only buyer can call this method");
         _;
     }
+    modifier onlyInspector () {
+        require(msg.sender == inspector, "Only inspector can call this method");
+        _;
+    }
 
     mapping(uint256 => bool) public isListed;
     mapping(uint256 => uint256) public purchasePrice;
     mapping(uint256 => uint256) public escrowAmount;
     mapping(uint256 => address) public buyer;
+    mapping(uint256 => bool) public inspectionPassed;
+    mapping(uint => mapping(address => bool)) public approval;
 
     constructor (
         address _nftAddress,
@@ -58,5 +64,50 @@ contract Escrow {
     // Put Under Contract (only buyer - payable escrow)
     function depositEarnest(uint256 _nftID) public payable onlyBuyer(_nftID) {
         require(msg.value >= escrowAmount[_nftID]);
+    }
+
+    // Update Inspection Status (only inspector)
+    function updateInspectionStatus(uint256 _nftID, 
+    bool _passed
+    ) public onlyInspector {
+        inspectionPassed[_nftID] = _passed;
+    }
+
+    //Approve Sale
+    function approveSale(uint256 _nftID) public {
+        approval[_nftID][msg.sender] = true;
+    }
+
+    receive() external payable {}
+
+    function getBalance () public view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function finalizeSale(uint256 _nftID) public {
+        require(inspectionPassed[_nftID]);
+        require(approval[_nftID][seller]);
+        require(approval[_nftID][buyer[_nftID]]);
+        require(address(this).balance >= purchasePrice[_nftID]);
+
+        isListed[_nftID] = false;
+    
+        (bool success, ) = payable(seller).call{value: purchasePrice[_nftID]}(
+            ""
+            );
+        require(success);
+
+        IERC721(nftAddress).transferFrom(address(this), buyer[_nftID], _nftID);
+    }
+
+    // Cancel Sale (handle earnest deposit)
+    // -> if inspection status is not approved, then refun, otherwise send to seller
+    //excercise: test this function
+    function cancelSale(uint256 _nftID) public {
+        if(inspectionPassed[_nftID] == false) {
+            payable(buyer[_nftID]).transfer(address(this).balance);
+        } else {
+            payable(seller).transfer(address(this).balance);
+        }
     }
 }
